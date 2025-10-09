@@ -7,5 +7,6 @@ export const REQUEST_DELAY = 100;
 export const CORS_ORIGINS = [
     'http://localhost:3003',
     'http://localhost:5173',
-    'https://danielyevtushenko.com'
+    'https://danielyevtushenko.com',
+    'https://www.danielyevtushenko.com',
 ];
