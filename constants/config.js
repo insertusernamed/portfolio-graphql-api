@@ -6,5 +6,6 @@ export const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 export const REQUEST_DELAY = 100;
 export const CORS_ORIGINS = [
     'http://localhost:3003',
+    'http://localhost:5173',
     'https://danielyevtushenko.com'
 ];
