@@ -51,8 +51,8 @@ export const GET_ALL_REPOS = `
         viewer {
             repositories(
                 first: 100,
-                affiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER],
-                ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER],
+                affiliations: [OWNER],
+                ownerAffiliations: [OWNER],
                 orderBy: { field: PUSHED_AT, direction: DESC }
             ) {
                 nodes {

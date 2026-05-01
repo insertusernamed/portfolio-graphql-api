@@ -1,26 +1,50 @@
 # Portfolio GraphQL API
 
-## Project Overview
+GraphQL backend for my portfolio. It fetches repository data from GitHub GraphQL and exposes a smaller schema that the frontend can consume in one request.
 
-This is a backend service built with Node.js, Express, and GraphQL. Its use case is to fetch my repository data from GitHub and expose it through a streamlined GraphQL API. This service acts as the data source for my personal portfolio website, allowing for a dynamic and efficient display of my projects.
+## What It Does
 
-## Purpose and Motivation
+- Serves a single GraphQL endpoint at `/graphql`
+- Returns two project groups: `pinnedRepos` and `otherRepos`
+- Excludes private repos and pinned duplicates from `otherRepos`
+- Uses short-lived in-memory caching to reduce repeated GitHub calls
+- Supports CORS for localhost and production portfolio domains
 
-This project was created for two main reasons:
+## Tech Stack
 
-1.  **Practical Application of Skills:** After completing a course on GraphQL, I wanted to apply the concepts to a real-world project. Building this API was a hands-on way to solidify my understanding of GraphQL schemas, queries, and resolvers.
+- Node.js + Express
+- `graphql-http`
+- GitHub GraphQL API
+- Docker
 
-2.  **Improving My Portfolio:** Previously, my portfolio's front end made direct calls to the GitHub REST API. By creating this dedicated backend, I now have a more efficient and flexible data layer. This approach allows me to tailor the data exactly to my front end's needs, reducing unnecessary data transfer and simplifying the client-side code.
+## Environment Variables
 
-## How It Works
+Create `.env`:
 
-The application is a server-side Express application. It uses the official GitHub GraphQL API to retrieve repository information, specifically my pinned and general projects. This data is then exposed through its own single GraphQL endpoint (`/graphql`).
+```env
+PORT=3003
+GITHUB_TOKEN=your_github_token
+NODE_ENV=development
+```
 
-My portfolio's front end sends queries to this endpoint to receive all the necessary project data in a single request. The entire application is containerized using Docker to ensure consistent behavior across different environments and to simplify deployment.
+## Run Locally
 
-## Technology Stack
+```sh
+npm install
+npm run dev
+```
 
--   **Runtime:** Node.js
--   **Framework:** Express.js
--   **API Layer:** GraphQL (using `express-graphql`)
--   **Containerization:** Docker
+Server URL: `http://localhost:3003/graphql`
+
+## Production Run
+
+```sh
+npm start
+```
+
+## Docker
+
+```sh
+docker build -t portfolio-graphql-api .
+docker run --env-file .env -p 3003:3003 portfolio-graphql-api
+```

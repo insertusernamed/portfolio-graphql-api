@@ -12,24 +12,60 @@ const headers = {
 };
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const cache = new Map();
+
+async function fetchGitHubGraphQL(query, variables = {}) {
+    const res = await axios.post(
+        GITHUB_API,
+        { query, variables },
+        { headers }
+    );
+
+    if (res.data.errors) {
+        throw new Error(JSON.stringify(res.data.errors));
+    }
+
+    return res.data.data;
+}
+
+function getCache(key) {
+    const cached = cache.get(key);
+    if (!cached) return null;
+    if (Date.now() > cached.expiresAt) {
+        cache.delete(key);
+        return null;
+    }
+    return cached.value;
+}
+
+function setCache(key, value) {
+    cache.set(key, {
+        value,
+        expiresAt: Date.now() + CACHE_TTL_MS
+    });
+}
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+    const output = new Array(items.length);
+    let index = 0;
+
+    async function worker() {
+        while (index < items.length) {
+            const current = index++;
+            output[current] = await mapper(items[current], current);
+        }
+    }
+
+    const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+    await Promise.all(workers);
+    return output;
+}
 
 export async function fetchRepoDetails(owner, name) {
     try {
-        const res = await axios.post(
-            GITHUB_API,
-            {
-                query: GET_REPO_DETAILS,
-                variables: { owner, name }
-            },
-            { headers }
-        );
-
-        if (res.data.errors) {
-            console.error(`GraphQL errors for ${owner}/${name}:`, res.data.errors);
-            return null;
-        }
-
-        return res.data.data.repository;
+        const data = await fetchGitHubGraphQL(GET_REPO_DETAILS, { owner, name });
+        return data.repository;
     } catch (error) {
         console.error(`Error fetching details for ${owner}/${name}:`, error.message);
         return null;
@@ -37,19 +73,15 @@ export async function fetchRepoDetails(owner, name) {
 }
 
 export async function fetchPinnedRepos() {
+    const cacheKey = 'pinnedRepos';
+    const cached = getCache(cacheKey);
+    if (cached) return cached;
+
     try {
-        const res = await axios.post(
-            GITHUB_API,
-            { query: GET_PINNED_REPOS },
-            { headers }
-        );
-
-        if (res.data.errors) {
-            console.error('GraphQL errors in pinnedRepos:', res.data.errors);
-            return [];
-        }
-
-        return res.data.data.viewer.pinnedItems.nodes;
+        const data = await fetchGitHubGraphQL(GET_PINNED_REPOS);
+        const repos = data.viewer.pinnedItems.nodes;
+        setCache(cacheKey, repos);
+        return repos;
     } catch (error) {
         console.error('Error fetching pinned repos:', error.message);
         return [];
@@ -57,38 +89,22 @@ export async function fetchPinnedRepos() {
 }
 
 export async function fetchOtherRepos() {
+    const cacheKey = 'otherRepos';
+    const cached = getCache(cacheKey);
+    if (cached) return cached;
+
     try {
         // Get pinned repo names for filtering
-        const pinnedRes = await axios.post(
-            GITHUB_API,
-            { query: GET_PINNED_REPO_NAMES },
-            { headers }
-        );
-
-        if (pinnedRes.data.errors) {
-            console.error('GraphQL errors in pinned query:', pinnedRes.data.errors);
-            return [];
-        }
-
+        const pinnedData = await fetchGitHubGraphQL(GET_PINNED_REPO_NAMES);
         const pinnedRepos = new Set(
-            pinnedRes.data.data.viewer.pinnedItems.nodes.map(r =>
+            pinnedData.viewer.pinnedItems.nodes.map(r =>
                 `${r.owner.login}/${r.name}`
             )
         );
 
         // Fetch all repositories
-        const reposRes = await axios.post(
-            GITHUB_API,
-            { query: GET_ALL_REPOS },
-            { headers }
-        );
-
-        if (reposRes.data.errors) {
-            console.error('GraphQL errors in repos query:', reposRes.data.errors);
-            return [];
-        }
-
-        const allRepos = reposRes.data.data.viewer.repositories.nodes;
+        const reposData = await fetchGitHubGraphQL(GET_ALL_REPOS);
+        const allRepos = reposData.viewer.repositories.nodes;
 
         // Filter out pinned and private repos
         const otherRepos = allRepos.filter(repo =>
@@ -96,17 +112,21 @@ export async function fetchOtherRepos() {
         );
 
         // Fetch detailed information for each repository
-        const detailedRepos = [];
-        for (const repo of otherRepos.slice(0, 20)) {
-            const details = await fetchRepoDetails(repo.owner.login, repo.name);
-            if (details) {
-                detailedRepos.push(details);
+        const detailedRepos = await mapWithConcurrency(
+            otherRepos.slice(0, 20),
+            4,
+            async (repo, i) => {
+                if (i > 0) {
+                    // Stagger requests slightly to reduce burst pressure.
+                    await delay(REQUEST_DELAY);
+                }
+                return fetchRepoDetails(repo.owner.login, repo.name);
             }
-            // Prevent rate limiting
-            await delay(REQUEST_DELAY);
-        }
+        );
 
-        return detailedRepos;
+        const filteredDetailedRepos = detailedRepos.filter(Boolean);
+        setCache(cacheKey, filteredDetailedRepos);
+        return filteredDetailedRepos;
     } catch (error) {
         console.error('Error fetching other repos:', error.response?.data || error.message);
         return [];
