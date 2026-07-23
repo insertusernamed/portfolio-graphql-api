@@ -1,11 +1,11 @@
-import { fetchPinnedRepos, fetchOtherRepos } from '../services/githubService.js';
+import { getCachedPinnedRepos, getCachedOtherRepos } from '../services/githubService.js';
 
 export const resolvers = {
     pinnedRepos: async () => {
-        return await fetchPinnedRepos();
+        return getCachedPinnedRepos();
     },
 
     otherRepos: async () => {
-        return await fetchOtherRepos();
+        return getCachedOtherRepos();
     }
 };

@@ -4,6 +4,7 @@ import { renderPlaygroundPage } from 'graphql-playground-html';
 import schema from './data/schema.js';
 import { resolvers } from './graphql/resolvers.js';
 import { PORT, CORS_ORIGINS } from './constants/config.js';
+import { startBackgroundRefresh } from './services/githubService.js';
 import cors from 'cors';
 
 const app = express();
@@ -45,6 +46,8 @@ if (process.env.NODE_ENV !== 'production') {
 app.get('/', (_, res) => {
     res.send('Server is running. Access /graphql for the API.');
 });
+
+startBackgroundRefresh();
 
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}/graphql`);
